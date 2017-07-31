@@ -21,6 +21,7 @@ import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 
+import com.alibaba.fastjson.JSONObject;
 import com.typesafe.config.ConfigFactory;
 
 /**
@@ -40,54 +41,45 @@ public class UploadImageServlet extends HttpServlet {
     }
 
     public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String ret_fileName = null;// 返回给前端已修改的图片名称
-
+        JSONObject resp = new JSONObject();
         request.setCharacterEncoding("UTF-8");
         response.setContentType("text/html; charset=UTF-8");
         PrintWriter out = response.getWriter();
-
         // 文件保存目录路径
         String savePath = configPath;
-
         // 临时文件目录
         String tempPath = this.getServletContext().getRealPath("/") + dirTemp;
-
         // 创建文件夹
         File dirFile = new File(savePath);
         if (!dirFile.exists()) {
             dirFile.mkdirs();
         }
-
         // 创建临时文件夹
         File dirTempFile = new File(tempPath);
         if (!dirTempFile.exists()) {
             dirTempFile.mkdirs();
         }
-
         DiskFileItemFactory factory = new DiskFileItemFactory();
         factory.setSizeThreshold(20 * 1024 * 1024); // 设定使用内存超过5M时，将产生临时文件并存储于临时目录中。
         factory.setRepository(new File(tempPath)); // 设定存储临时文件的目录。
-
         ServletFileUpload upload = new ServletFileUpload(factory);
         upload.setHeaderEncoding("UTF-8");
-
         try {
             List<?> items = upload.parseRequest(request);
             Iterator<?> itr = items.iterator();
-
             while (itr.hasNext()) {
                 FileItem item = (FileItem) itr.next();
-                String fileName = item.getName();
-                if (fileName != null) {
-                    String endstr = fileName.substring(fileName.indexOf("."), fileName.length());
-                    fileName = UUID.randomUUID().toString().concat(endstr);
-                    ret_fileName = fileName;
+                String originFileName = item.getName();
+                resp.put("originFileName", originFileName);
+                String fileName = null;
+                if (originFileName != null) {
+                    String suffix = originFileName.substring(originFileName.lastIndexOf("."));
+                    fileName = UUID.randomUUID().toString().concat(suffix);
+                    resp.put("fileName", fileName);
                 }
                 if (!item.isFormField()) {
-
                     try {
                         File uploadedFile = new File(savePath, fileName);
-
                         OutputStream os = new FileOutputStream(uploadedFile);
                         InputStream is = item.getInputStream();
                         byte buf[] = new byte[1024];// 可以修改 1024 以提高读取速度
@@ -104,12 +96,11 @@ public class UploadImageServlet extends HttpServlet {
                     }
                 }
             }
-
         } catch (FileUploadException e) {
             e.printStackTrace();
         }
         // 将已修改的图片名称返回前端
-        out.print(ret_fileName);
+        out.print(resp.toJSONString());
         out.flush();
         out.close();
     }
